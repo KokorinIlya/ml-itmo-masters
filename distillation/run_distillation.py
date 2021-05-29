@@ -1,9 +1,9 @@
-from resnet import ResNet
-from cifar import load_cifar10
-from train import train_model
+from common.resnet import ResNet
+from common.cifar import load_cifar10
+from distillation.train import train_model
 import torch
 import argparse
-from evaluation import calc_accuracy
+from common.evaluation import calc_accuracy
 
 
 def str2bool(s):
@@ -34,7 +34,7 @@ def load_epoch_passed(model_name):
         return len(non_empty_lines) - 1
 
 
-def main():
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", required=True, help='Mode of execution. Can be either:\n'
                                                       'train - train the new model from scratch\n'
@@ -53,10 +53,13 @@ def main():
                         help='Name of the teacher mode. Required if use_teacher is set to True')
     parser.add_argument("--teacher_layers", required=False, type=int,
                         help='Number of layers in the teacher model. Required if use_teacher is set to True')
-    args = parser.parse_args()
-    assert args.mode in {'train', 'continue', 'eval'}
+    return parser.parse_args()
 
-    test_dataset = load_cifar10(is_train=False, save_path='data')
+
+def main():
+    args = parse_args()
+    assert args.mode in {'train', 'continue', 'eval'}
+    test_dataset = load_cifar10(is_train=False, save_path='../data')
 
     if args.mode == 'eval':
         model = load_model(model_name=args.name, layers_count=args.layers)
@@ -64,7 +67,7 @@ def main():
         print('Accuracy = {0}'.format(acc))
     else:
         assert args.mode in {'train', 'continue'}
-        train_dataset = load_cifar10(is_train=True, save_path='data')
+        train_dataset = load_cifar10(is_train=True, save_path='../data')
         if args.mode == 'continue':
             model = load_model(model_name=args.name, layers_count=args.layers)
             epochs_passed = load_epoch_passed(model_name=args.name)

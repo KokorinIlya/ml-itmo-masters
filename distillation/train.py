@@ -2,7 +2,7 @@ import time
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from evaluation import calc_accuracy
+from common.evaluation import calc_accuracy
 
 
 def train_model(model, epochs,

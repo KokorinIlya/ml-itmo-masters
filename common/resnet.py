@@ -3,12 +3,14 @@ import torch.nn.functional as F
 
 
 def make_conv(channels):
-    return nn.Conv2d(channels, channels, kernel_size=(3, 3), stride=1, padding=1)
+    # noinspection PyTypeChecker
+    return nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=3, stride=1, padding=1)
 
 
 class SimpleBlock(nn.Module):
     def __init__(self, channels):
-        super(SimpleBlock, self).__init__()
+        nn.Module.__init__(self)
+
         self.conv1 = make_conv(channels)
         self.bn1 = nn.BatchNorm2d(channels)
         self.conv2 = make_conv(channels)
@@ -24,10 +26,12 @@ class DownBlock(nn.Module):
     def __init__(self, in_chan):
         super(DownBlock, self).__init__()
         self.out_chan = in_chan * 2
-        self.conv1 = nn.Conv2d(in_chan, self.out_chan, kernel_size=(3, 3), stride=2, padding=1)
+        # noinspection PyTypeChecker
+        self.conv1 = nn.Conv2d(in_chan, self.out_chan, kernel_size=3, stride=2, padding=1)
         self.conv2 = make_conv(self.out_chan)
         self.bn2 = nn.BatchNorm2d(self.out_chan)
-        self.conv_down = nn.Conv2d(in_chan, self.out_chan, kernel_size=(1, 1), stride=2, bias=False)
+        # noinspection PyTypeChecker
+        self.conv_down = nn.Conv2d(in_chan, self.out_chan, kernel_size=1, stride=2, bias=False)
         self.bn_down = nn.BatchNorm2d(self.out_chan)
 
         self.bn_down.weight.data.fill_(1)
@@ -44,29 +48,20 @@ class DownBlock(nn.Module):
 
 class ResNet(nn.Module):
     def __init__(self, n):
-        super(ResNet, self).__init__()
+        nn.Module.__init__(self)
 
-        self.conv1 = nn.Conv2d(3, 16, (3, 3), stride=1, padding=1)
+        # noinspection PyTypeChecker
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1)
         self.bn1 = nn.BatchNorm2d(16)
-
-        self.seq32_32 = nn.Sequential()
-        for i in range(n):
-            self.seq32_32.add_module(str(i), SimpleBlock(16))
-
-        self.seq16_16 = nn.Sequential()
-        for i in range(n):
-            if i == 0:
-                self.seq16_16.add_module(str(i), DownBlock(16))
-            else:
-                self.seq16_16.add_module(str(i), SimpleBlock(32))
-
-        self.seq8_8 = nn.Sequential()
-        for i in range(n):
-            if i == 0:
-                self.seq8_8.add_module(str(i), DownBlock(32))
-            else:
-                self.seq8_8.add_module(str(i), SimpleBlock(64))
-
+        self.seq32_32 = nn.Sequential(
+            *[SimpleBlock(16) for _ in range(n)]
+        )
+        self.seq16_16 = nn.Sequential(
+            *[DownBlock(16) if i == 0 else SimpleBlock(32) for i in range(n)]
+        )
+        self.seq8_8 = nn.Sequential(
+            *[DownBlock(32) if i == 0 else SimpleBlock(64) for i in range(n)]
+        )
         self.fc = nn.Linear(64, 10)
 
     def forward(self, x):
