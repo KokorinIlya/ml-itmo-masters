@@ -9,7 +9,8 @@ def main():
     test_dataset = load_cifar10(is_train=False, save_path='../data')
     train_shards = shard_dataset(train_dataset, shards_count=1, shuffle=False)
     model = ResNet(2)
-    train_distributed(model=model, epochs=10, train_shards=train_shards, test_dataset=test_dataset)
+    train_distributed(model=model, epochs=10, lr=0.1,
+                      train_shards=train_shards, test_dataset=test_dataset, train_batch_size=128)
 
 
 if __name__ == '__main__':

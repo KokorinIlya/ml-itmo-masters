@@ -6,8 +6,8 @@ from common.evaluation import calc_accuracy
 
 
 def __get_grad_single_shard(model, train_shard_iter):
+    model.zero_grad()
     try:
-        model.zero_grad()
         X, y = next(train_shard_iter)
         y_hat = model(X)
         loss = F.cross_entropy(y_hat, y)
@@ -28,20 +28,24 @@ def __collect_grads(model, train_iters):
 
 
 def __do_step(model, opt, grads, shards_count):
+    params_list = list(model.parameters())
+    for cur_param_grads in grads:
+        assert len(params_list) == len(cur_param_grads)
     for cur_param, *cur_param_grads in zip(model.parameters(), *grads):
         assert len(cur_param_grads) == shards_count
         result_grad = torch.zeros_like(cur_param_grads[0])
         for cur_param_grad in cur_param_grads:
             assert result_grad.size() == cur_param_grad.size()
             result_grad += cur_param_grad
+        assert cur_param.size() == result_grad.size()
         cur_param.grad = result_grad
     opt.step()
 
 
-def train_distributed(model, epochs,
+def train_distributed(model, epochs, lr,
                       train_shards, test_dataset,
                       train_batch_size=128, test_batch_size=128):
-    opt = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.0001, momentum=0.9)
+    opt = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.0001, momentum=0.9)
     train_start_time = time.time()
     accs = []
     acc = calc_accuracy(model, test_dataset, batch_size=test_batch_size)
@@ -60,19 +64,19 @@ def train_distributed(model, epochs,
             grads, has_grads = __collect_grads(model, train_iters)
             if has_grads:
                 __do_step(model=model, opt=opt, grads=grads, shards_count=len(train_shards))
-                continue
             else:
-                acc = calc_accuracy(model, test_dataset, batch_size=test_batch_size)
-                accs.append(acc)
-
-                cur_time = time.time()
-                epoch_time_spent = int(cur_time - epoch_start_time)
-                total_time_spent = int(cur_time - train_start_time)
-                print(
-                    "Epochs passed = {0}, acc = {1}, seconds per epoch = {2}, total seconds elapsed = {3}".format(
-                        epoch + 1, acc, epoch_time_spent, total_time_spent
-                    )
-                )
                 break
+
+        acc = calc_accuracy(model, test_dataset, batch_size=test_batch_size)
+        accs.append(acc)
+
+        cur_time = time.time()
+        epoch_time_spent = int(cur_time - epoch_start_time)
+        total_time_spent = int(cur_time - train_start_time)
+        print(
+            "Epochs passed = {0}, acc = {1}, seconds per epoch = {2}, total seconds elapsed = {3}".format(
+                epoch + 1, acc, epoch_time_spent, total_time_spent
+            )
+        )
 
     return accs
