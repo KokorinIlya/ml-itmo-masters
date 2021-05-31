@@ -47,16 +47,21 @@ def __check_sizes(model: torch.nn.Module, shards_grads: List[List[torch.Tensor]]
     return True
 
 
+def __calc_grad(param_grads: List[torch.Tensor], param: torch.Tensor, shards_count: int):
+    assert len(param_grads) == shards_count
+    result_grad = torch.zeros_like(param_grads[0])
+    assert param.size() == result_grad.size()
+    for cur_param_grad in param_grads:
+        assert result_grad.size() == cur_param_grad.size()
+        result_grad += cur_param_grad
+    return result_grad
+
+
 def __do_step(model: torch.nn.Module, opt: torch.optim.Optimizer,
               shards_grads: List[List[torch.Tensor]], shards_count: int):
     assert __check_sizes(model, shards_grads, shards_count)
     for cur_param, *cur_param_grads in zip(model.parameters(), *shards_grads):
-        assert len(cur_param_grads) == shards_count
-        result_grad = torch.zeros_like(cur_param_grads[0])
-        for cur_param_grad in cur_param_grads:
-            assert result_grad.size() == cur_param_grad.size()
-            result_grad += cur_param_grad
-        assert cur_param.size() == result_grad.size()
+        result_grad = __calc_grad(cur_param_grads, cur_param, shards_count)
         cur_param.grad = result_grad
     opt.step()
 
@@ -66,8 +71,8 @@ def train_distributed(model: torch.nn.Module, epochs: int, lr: float,
                       train_batch_size: int = 128, test_batch_size: int = 128) -> List[float]:
     opt = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.0001, momentum=0.9)
     train_start_time = time.time()
-    accs = []
     acc = calc_accuracy(model, test_dataset, batch_size=test_batch_size)
+    accs = [acc]
     print("Initial acc = {0}".format(acc))
 
     for epoch in range(epochs):
