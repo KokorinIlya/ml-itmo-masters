@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from common.evaluation import calc_accuracy
+import torch.nn as nn
 
 
 def __get_grad_single_shard(model, train_shard_iter):
@@ -18,7 +19,6 @@ def __get_grad_single_shard(model, train_shard_iter):
 
 
 def __collect_grads(model, train_iters):
-    model.zero_grad()
     grads = []
     has_grads = False
     for shard_iter in train_iters:
@@ -28,10 +28,19 @@ def __collect_grads(model, train_iters):
     return grads, has_grads
 
 
-def __do_step(model, opt, grads, shards_count):
+def __check_sizes(model, grads):
     params_list = list(model.parameters())
     for cur_param_grads in grads:
-        assert len(params_list) == len(cur_param_grads)
+        if len(params_list) != len(cur_param_grads):
+            return False
+        for cur_param_grad, cur_param in zip(cur_param_grads, params_list):
+            if cur_param_grad.size() != cur_param.size():
+                return False
+    return True
+
+
+def __do_step(model, opt, grads, shards_count):
+    assert __check_sizes(model, grads)
     for cur_param, *cur_param_grads in zip(model.parameters(), *grads):
         assert len(cur_param_grads) == shards_count
         result_grad = torch.zeros_like(cur_param_grads[0])
