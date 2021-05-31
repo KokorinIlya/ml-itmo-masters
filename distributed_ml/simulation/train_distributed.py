@@ -3,10 +3,14 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from common.evaluation import calc_accuracy
-import torch.nn as nn
+from distributed_ml.sharding import DatasetShard
+from typing import List, Iterator, Tuple
+from torchvision.datasets.vision import VisionDataset
 
 
-def __get_grad_single_shard(model, train_shard_iter):
+def __get_grad_single_shard(model: torch.nn.Module,
+                            train_shard_iter:
+                            Iterator[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[List[torch.Tensor], bool]:
     model.zero_grad()
     try:
         X, y = next(train_shard_iter)
@@ -18,7 +22,9 @@ def __get_grad_single_shard(model, train_shard_iter):
         return [torch.zeros_like(x) for x in model.parameters()], False
 
 
-def __collect_grads(model, train_iters):
+def __collect_grads(model: torch.nn.Module,
+                    train_iters: List[Iterator[Tuple[torch.Tensor,
+                                                     torch.Tensor]]]) -> Tuple[List[List[torch.Tensor]], bool]:
     grads = []
     has_grads = False
     for shard_iter in train_iters:
@@ -28,20 +34,23 @@ def __collect_grads(model, train_iters):
     return grads, has_grads
 
 
-def __check_sizes(model, grads):
+def __check_sizes(model: torch.nn.Module, shards_grads: List[List[torch.Tensor]], shards_count: int) -> bool:
+    if len(shards_grads) != shards_count:
+        return False
     params_list = list(model.parameters())
-    for cur_param_grads in grads:
-        if len(params_list) != len(cur_param_grads):
+    for cur_shard_grads in shards_grads:
+        if len(params_list) != len(cur_shard_grads):
             return False
-        for cur_param_grad, cur_param in zip(cur_param_grads, params_list):
+        for cur_param_grad, cur_param in zip(cur_shard_grads, params_list):
             if cur_param_grad.size() != cur_param.size():
                 return False
     return True
 
 
-def __do_step(model, opt, grads, shards_count):
-    assert __check_sizes(model, grads)
-    for cur_param, *cur_param_grads in zip(model.parameters(), *grads):
+def __do_step(model: torch.nn.Module, opt: torch.optim.Optimizer,
+              shards_grads: List[List[torch.Tensor]], shards_count: int):
+    assert __check_sizes(model, shards_grads, shards_count)
+    for cur_param, *cur_param_grads in zip(model.parameters(), *shards_grads):
         assert len(cur_param_grads) == shards_count
         result_grad = torch.zeros_like(cur_param_grads[0])
         for cur_param_grad in cur_param_grads:
@@ -52,9 +61,9 @@ def __do_step(model, opt, grads, shards_count):
     opt.step()
 
 
-def train_distributed(model, epochs, lr,
-                      train_shards, test_dataset,
-                      train_batch_size=128, test_batch_size=128):
+def train_distributed(model: torch.nn.Module, epochs: int, lr: float,
+                      train_shards: List[DatasetShard], test_dataset: VisionDataset,
+                      train_batch_size: int = 128, test_batch_size: int = 128) -> List[float]:
     opt = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.0001, momentum=0.9)
     train_start_time = time.time()
     accs = []
@@ -73,7 +82,7 @@ def train_distributed(model, epochs, lr,
         while True:
             grads, has_grads = __collect_grads(model, train_iters)
             if has_grads:
-                __do_step(model=model, opt=opt, grads=grads, shards_count=len(train_shards))
+                __do_step(model=model, opt=opt, shards_grads=grads, shards_count=len(train_shards))
             else:
                 break
 

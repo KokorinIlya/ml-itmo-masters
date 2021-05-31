@@ -2,7 +2,7 @@ from torchvision import transforms
 import torchvision
 
 
-def load_cifar10(is_train, save_path):
+def load_cifar10(is_train: bool, save_path: str) -> torchvision.datasets.CIFAR10:
     if is_train:
         transformers = [
             transforms.RandomHorizontalFlip(),

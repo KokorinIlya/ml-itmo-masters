@@ -1,7 +1,9 @@
 from torch.utils.data import DataLoader
+from torchvision.datasets.vision import VisionDataset
+import torch
 
 
-def calc_accuracy(model, test_dataset, batch_size=128):
+def calc_accuracy(model: torch.nn.Module, test_dataset: VisionDataset, batch_size: int = 128):
     model.eval()
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     total_correct = 0
