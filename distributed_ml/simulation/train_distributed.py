@@ -12,54 +12,35 @@ def __get_grad_single_shard(model, train_shard_iter):
         y_hat = model(X)
         loss = F.cross_entropy(y_hat, y)
         loss.backward()
-        return [x.grad.detach() for x in model.parameters()], True, X, y
+        return [x.grad.detach().clone() for x in model.parameters()], True
     except StopIteration:
-        return [torch.zeros_like(x) for x in model.parameters()], False, None, None
+        return [torch.zeros_like(x) for x in model.parameters()], False
 
 
 def __collect_grads(model, train_iters):
+    model.zero_grad()
     grads = []
     has_grads = False
-    X, y = None, None
     for shard_iter in train_iters:
-        cur_grad, has_grad, X_cur, y_cur = __get_grad_single_shard(model, shard_iter)
-
-        if X is None:
-            X = X_cur
-            y = y_cur
-        elif X_cur is not None:
-            X = torch.vstack((X, X_cur))
-            y = torch.hstack((y, y_cur))
-
+        cur_grad, has_grad = __get_grad_single_shard(model, shard_iter)
         grads.append(cur_grad)
         has_grads = has_grads or has_grad
-    return grads, has_grads, X, y
+    return grads, has_grads
 
 
-def __do_step(model, opt, grads, shards_count, true_grad):
-    model.zero_grad()
+def __do_step(model, opt, grads, shards_count):
     params_list = list(model.parameters())
     for cur_param_grads in grads:
         assert len(params_list) == len(cur_param_grads)
-    for cur_param, cur_true_grad, *cur_param_grads in zip(model.parameters(), true_grad, *grads):
+    for cur_param, *cur_param_grads in zip(model.parameters(), *grads):
         assert len(cur_param_grads) == shards_count
         result_grad = torch.zeros_like(cur_param_grads[0])
         for cur_param_grad in cur_param_grads:
             assert result_grad.size() == cur_param_grad.size()
             result_grad += cur_param_grad
         assert cur_param.size() == result_grad.size()
-        result_grad /= shards_count
-        assert ((cur_true_grad - result_grad).abs() < 1e-4).all().item()
         cur_param.grad = result_grad
     opt.step()
-
-
-def __calc_grad(model, X, y):
-    model.zero_grad()
-    y_hat = model(X)
-    loss = F.cross_entropy(y_hat, y)
-    loss.backward()
-    return [x.grad.detach() for x in model.parameters()]
 
 
 def train_distributed(model, epochs, lr,
@@ -81,11 +62,9 @@ def train_distributed(model, epochs, lr,
         ]
 
         while True:
-            grads, has_grads, X, y = __collect_grads(model, train_iters)
+            grads, has_grads = __collect_grads(model, train_iters)
             if has_grads:
-                assert X is not None and y is not None
-                true_grad = __calc_grad(model, X, y)
-                __do_step(model=model, opt=opt, grads=grads, shards_count=len(train_shards), true_grad=true_grad)
+                __do_step(model=model, opt=opt, grads=grads, shards_count=len(train_shards))
             else:
                 break
 
