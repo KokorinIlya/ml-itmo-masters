@@ -24,7 +24,9 @@ def main():
         optGetter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
         train_shards=train_shards, test_dataset=test_dataset,
         # gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
-        gradient_processor=TopKSparcifier(k=total_params // 5),
+        # gradient_processor=TopKSparcifier(k=total_params // 5),
+        # gradient_processor=OneBitQuantizator(per_layer=True),
+        gradient_processor=OneBitQuantizator(per_layer=False),
         train_batch_size=32,
         # save_grad_dist=True
     )
