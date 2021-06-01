@@ -61,8 +61,9 @@ class SendGradientsTrain:
         except StopIteration:
             return [torch.zeros_like(x) for x in self.model.parameters()], 0
 
-    def __collect_grads(self, train_iters: List[Iterator[Tuple[torch.Tensor,
-                                                               torch.Tensor]]]) -> Tuple[List[List[torch.Tensor]], int]:
+    def __collect_grads(self,
+                        train_iters: List[Iterator[Tuple[torch.Tensor,
+                                                         torch.Tensor]]]) -> Tuple[List[List[torch.Tensor]], int]:
         grads = []
         total_samples = 0
         for shard_iter in train_iters:
@@ -121,7 +122,7 @@ class SendGradientsTrain:
                 result_grad = SendGradientsTrain.__calc_grad(cur_param_grads, cur_param, shards_count, total_samples)
 
                 assert cur_param_true_grad.size() == result_grad.size()
-                dist_m = (result_grad - cur_param_true_grad) / (cur_param_true_grad + 1e-3)
+                dist_m = (result_grad - cur_param_true_grad)  # / (cur_param_true_grad + 1e-3)
                 total_dist += dist_m.abs().sum().item()
                 total_count += result_grad.numel()
 

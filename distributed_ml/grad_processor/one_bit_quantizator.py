@@ -1,4 +1,5 @@
 from distributed_ml.grad_processor.gradient_processor import GradientProcessor
+from distributed_ml.grad_processor.utils import get_flattened_grads, unflatten_grads
 from typing import List
 import torch
 
@@ -23,16 +24,8 @@ class OneBitQuantizator(GradientProcessor):
                 OneBitQuantizator.__process_flattened(flattened_layer)
                 shard_grads[i] = flattened_layer.reshape(*cur_layer.size())
         else:
-            all_grads = shard_grads[0].flatten()
-            for cur_layer in shard_grads[1:]:
-                flattened_layer = cur_layer.flatten()
-                all_grads = torch.hstack((all_grads, flattened_layer))
+            all_grads = get_flattened_grads(shard_grads)
             OneBitQuantizator.__process_flattened(all_grads)
-            start_idx = 0
-            for i, cur_layer in enumerate(shard_grads):
-                cur_layer_size = cur_layer.numel()
-                flattened_layer = all_grads[start_idx: start_idx + cur_layer_size]
-                start_idx += cur_layer_size
-                shard_grads[i] = flattened_layer.reshape(*cur_layer.size())
+            unflatten_grads(shard_grads, all_grads)
 
         return shard_grads
