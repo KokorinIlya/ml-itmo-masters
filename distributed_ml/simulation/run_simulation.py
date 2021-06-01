@@ -23,6 +23,7 @@ def main():
         model=model, epochs=10,
         optGetter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
         train_shards=train_shards, test_dataset=test_dataset,
+        # gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
         gradient_processor=TopKSparcifier(k=total_params // 5),
         train_batch_size=32,
         # save_grad_dist=True

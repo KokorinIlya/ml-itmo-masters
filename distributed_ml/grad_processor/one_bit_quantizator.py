@@ -22,10 +22,12 @@ class OneBitQuantizator(GradientProcessor):
                 # babe, it's 4 pm, time for your gradient flattening
                 flattened_layer = cur_layer.flatten()  # yes, honey
                 OneBitQuantizator.__process_flattened(flattened_layer)
+                assert flattened_layer.unique().size() == 2
                 shard_grads[i] = flattened_layer.reshape(*cur_layer.size())
         else:
             all_grads = get_flattened_grads(shard_grads)
             OneBitQuantizator.__process_flattened(all_grads)
+            assert all_grads.unique().size() == 2
             unflatten_grads(shard_grads, all_grads)
 
         return shard_grads
