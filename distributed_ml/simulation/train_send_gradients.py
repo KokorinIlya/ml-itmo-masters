@@ -5,13 +5,16 @@ from torch.utils.data import DataLoader
 from common.evaluation import calc_accuracy
 from distributed_ml.sharding import DatasetShard
 from typing import List, Iterator, Tuple, Callable, Optional
+from distributed_ml.grad_processor.gradient_processor import GradientProcessor
+from distributed_ml.grad_processor.nop_gradient_processor import NopGradientProcessor
 from torchvision.datasets.vision import VisionDataset
 
 
-class DistributedTrain:
+class SendGradientsTrain:
     def __init__(self, model: torch.nn.Module, epochs: int,
                  optGetter: Callable[[Iterator[torch.nn.Parameter]], torch.optim.Optimizer],
                  train_shards: List[DatasetShard], test_dataset: VisionDataset,
+                 gradient_processor: GradientProcessor = NopGradientProcessor(),
                  train_batch_size: int = 128, test_batch_size: int = 128,
                  save_grad_dist: bool = False):
         self.model = model
@@ -21,6 +24,7 @@ class DistributedTrain:
         self.test_dataset = test_dataset
         self.train_batch_size = train_batch_size
         self.test_batch_size = test_batch_size
+        self.gradient_processor = gradient_processor
 
         self.grad_dist: Optional[List[float]] = [] if save_grad_dist else None
         self.X: Optional[torch.Tensor] = None
@@ -52,7 +56,8 @@ class DistributedTrain:
             loss = F.cross_entropy(y_hat, y, reduction='sum')
             self.__add_X_y(X, y)
             loss.backward()
-            return [x.grad.detach().clone() for x in self.model.parameters()], len(X)
+            shard_grads = [x.grad.detach().clone() for x in self.model.parameters()]
+            return self.gradient_processor(shard_grads), len(X)
         except StopIteration:
             return [torch.zeros_like(x) for x in self.model.parameters()], 0
 
@@ -103,7 +108,7 @@ class DistributedTrain:
         if self.grad_dist is None:
             assert self.X is None and self.y is None
             for cur_param, *cur_param_grads in zip(self.model.parameters(), *shards_grads):
-                result_grad = DistributedTrain.__calc_grad(cur_param_grads, cur_param, shards_count, total_samples)
+                result_grad = SendGradientsTrain.__calc_grad(cur_param_grads, cur_param, shards_count, total_samples)
                 cur_param.grad = result_grad
         else:
             assert self.X is not None and self.y is not None
@@ -113,7 +118,7 @@ class DistributedTrain:
             for cur_param, cur_param_true_grad, *cur_param_grads in zip(self.model.parameters(),
                                                                         true_grad,
                                                                         *shards_grads):
-                result_grad = DistributedTrain.__calc_grad(cur_param_grads, cur_param, shards_count, total_samples)
+                result_grad = SendGradientsTrain.__calc_grad(cur_param_grads, cur_param, shards_count, total_samples)
 
                 assert cur_param_true_grad.size() == result_grad.size()
                 dist_m = (result_grad - cur_param_true_grad) / (cur_param_true_grad + 1e-3)
@@ -121,6 +126,7 @@ class DistributedTrain:
                 total_count += result_grad.numel()
 
                 cur_param.grad = result_grad
+            assert total_count > 0
             self.grad_dist.append(total_dist / total_count)
         self.opt.step()
 
