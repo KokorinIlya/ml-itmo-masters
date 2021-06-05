@@ -5,8 +5,11 @@ from common.resnet import ResNet
 
 def main():
     test_dataset = load_cifar10(is_train=False, save_path='../../../data')
+    train_dataset = load_cifar10(is_train=True, save_path='../../../data')
     model = ResNet(n=2)
-    master(model=model, workers_count=4, epochs_count=3, test_dataset=test_dataset)
+    master(model=model, workers_count=4, epochs_count=3,
+           train_dataset=train_dataset, train_batch_size=32,
+           test_dataset=test_dataset)
 
 
 if __name__ == '__main__':
