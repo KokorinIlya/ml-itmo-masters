@@ -97,7 +97,7 @@ def train(model: torch.nn.Module, epochs: int, shards_count: int,
 
     main_pipes = []
     for _ in range(shards_count):
-        recv_chan, send_chan = Pipe(duplex=True)
+        recv_chan, send_chan = Pipe(duplex=False)
         main_pipes.append((recv_chan, send_chan))
 
     processes = []
