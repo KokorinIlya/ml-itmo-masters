@@ -1,4 +1,4 @@
-from multiprocessing import Pipe, Process
+from multiprocessing import Pipe, Process, Queue
 from distributed_ml.distributed.send_grads.worker import worker
 import torch
 from common.evaluation import calc_accuracy
@@ -28,17 +28,18 @@ def __build_master_pipes(workers_count: int) -> List[Tuple[Connection, Connectio
     return master_pipes
 
 
-def __build_ipc_pipes(workers_count: int) -> Dict[Tuple[int, int], Tuple[Connection, Connection]]:
+def __build_ipc_pipes(workers_count: int) -> Dict[Tuple[int, int], Tuple[Queue, Queue]]:
     result = {}
     for i in range(workers_count):
         for j in range(i + 1, workers_count):
-            chan_i, chan_j = Pipe(duplex=True)
+            chan_i = Queue()
+            chan_j = Queue()
             result[(i, j)] = (chan_i, chan_j)
     return result
 
 
-def __get_proc_ips_chans(ipc_pipes: Dict[Tuple[int, int], Tuple[Connection, Connection]],
-                         proc_id: int, workers_count: int) -> List[Connection]:
+def __get_proc_ips_chans(ipc_pipes: Dict[Tuple[int, int], Tuple[Queue, Queue]],
+                         proc_id: int, workers_count: int) -> List[Queue]:
     result = []
     for j in range(workers_count):
         if j == proc_id:
@@ -57,7 +58,7 @@ def __build_workers(model: torch.nn.Module, workers_count: int, epochs_count: in
                     train_batch_size: int, send_each_epoch: bool,
                     opt_getter: Callable[[Iterable[torch.nn.Parameter]], torch.optim.Optimizer],
                     master_pipes: List[Tuple[Connection, Connection]],
-                    ipc_pipes: Dict[Tuple[int, int], Tuple[Connection, Connection]],
+                    ipc_pipes: Dict[Tuple[int, int], Tuple[Queue, Queue]],
                     train_shards: List[DatasetShard]) -> List[Process]:
     ps = []
     for i in range(workers_count):
@@ -89,7 +90,8 @@ def master(model: torch.nn.Module, workers_count: int, epochs_count: int,
     master_pipes = __build_master_pipes(workers_count)
     ipc_pipes = __build_ipc_pipes(workers_count)
     workers = __build_workers(model=model, epochs_count=epochs_count, workers_count=workers_count,
-                              opt_getter=opt_getter, send_each_epoch=send_each_epoch, train_batch_size=train_batch_size,
+                              opt_getter=opt_getter, send_each_epoch=send_each_epoch,
+                              train_batch_size=train_batch_size,
                               ipc_pipes=ipc_pipes, train_shards=train_shards, master_pipes=master_pipes)
 
     for cur_worker in workers:
@@ -114,7 +116,7 @@ def master(model: torch.nn.Module, workers_count: int, epochs_count: int,
                 assert __check_models(base_model, cur_model), \
                     f"Model from worker#{i} differs from the model from worker#0"
 
-        acc = calc_accuracy(model=model, test_dataset=test_dataset, batch_size=test_batch_size)
+        acc = calc_accuracy(model=base_model, test_dataset=test_dataset, batch_size=test_batch_size)
         cur_time = time.time()
         epoch_time_spent = int(cur_time - epoch_start_time)
         total_time_spent = int(cur_time - train_start_time)

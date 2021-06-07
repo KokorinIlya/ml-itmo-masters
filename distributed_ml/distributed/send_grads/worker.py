@@ -1,4 +1,5 @@
 from multiprocessing.connection import Connection
+from multiprocessing import Queue
 import torch
 from distributed_ml.sharding import DatasetShard
 import pickle
@@ -6,7 +7,6 @@ from typing import List, Callable, Iterable, Optional
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from distributed_ml.distributed.send_grads.messages import Message, EndMarker, Gradient
-import os
 
 
 def __check_sizes(model: torch.nn.Module, shards_grads: List[List[torch.Tensor]]) -> bool:
@@ -29,7 +29,8 @@ def __set_grads(model: torch.nn.Module, all_grads: List[List[torch.Tensor]], tot
 
 
 def __update_model(model: torch.nn.Module,
-                   ipc_chans: List[Connection], is_active: List[bool],
+                   opt: torch.optim.Optimizer,
+                   ipc_chans: List[Queue], is_active: List[bool],
                    own_samples: Optional[int], own_grads: Optional[List[torch.Tensor]]) -> int:
     all_grads = []
     if own_grads is not None:
@@ -41,11 +42,9 @@ def __update_model(model: torch.nn.Module,
         total_samples = 0
 
     next_active_count = 0
-    has_active = False
     for i, cur_chan in enumerate(ipc_chans):
         if is_active[i]:
-            has_active = True
-            cur_msg_bytes = cur_chan.recv()
+            cur_msg_bytes = cur_chan.get()
             cur_msg = pickle.loads(cur_msg_bytes)
             assert isinstance(cur_msg, Message)
             if type(cur_msg) is EndMarker:
@@ -56,25 +55,23 @@ def __update_model(model: torch.nn.Module,
                 cur_msg: Gradient = cur_msg
                 all_grads.append(cur_msg.grads)
                 total_samples += cur_msg.samples_count
-    assert has_active
-    # assert __check_sizes(model, all_grads)
-    # __set_grads(model, all_grads, total_samples)
-
-    # TODO: opt.step()
-
+    assert __check_sizes(model, all_grads)
+    __set_grads(model, all_grads, total_samples)
+    opt.step()
     return next_active_count
 
 
 def worker(model_bytes: bytes, epochs_count: int,
            opt_getter: Callable[[Iterable[torch.nn.Parameter]], torch.optim.Optimizer],
            train_shard: DatasetShard, train_batch_size: int,
-           ipc_chans: List[Connection],
+           ipc_chans: List[Queue],
            master_send_chan: Connection, send_each_epoch: bool):
     model = pickle.loads(model_bytes)
     assert isinstance(model, torch.nn.Module)
     opt = opt_getter(model.parameters())
 
     for epoch in range(epochs_count):
+        model.train()
         is_active = [True for _ in ipc_chans]
         cur_active = len(ipc_chans)
         data_loader = DataLoader(dataset=train_shard, batch_size=train_batch_size, shuffle=True)
@@ -89,22 +86,20 @@ def worker(model_bytes: bytes, epochs_count: int,
 
             cur_grads = [x.grad.detach().clone() for x in model.parameters()]
             for cur_chan in ipc_chans:
-                message = Gradient(grads=[], samples_count=len(X))
+                message = Gradient(grads=cur_grads, samples_count=len(X))
                 msg_bytes = pickle.dumps(message)
-                # print(f'Worker#{os.getpid()} is sending')
-                cur_chan.send(msg_bytes)
-                # print(f'Worker#{os.getpid()} has sent')
-            cur_active = __update_model(model=model, ipc_chans=ipc_chans, is_active=is_active,
+                cur_chan.put(msg_bytes)
+            cur_active = __update_model(model=model, opt=opt, ipc_chans=ipc_chans, is_active=is_active,
                                         own_grads=cur_grads, own_samples=len(X))
 
         for cur_chan in ipc_chans:
             message = EndMarker()
             msg_bytes = pickle.dumps(message)
-            cur_chan.send(msg_bytes)
+            cur_chan.put(msg_bytes)
 
         while cur_active > 0:
             assert cur_active == sum(is_active)
-            cur_active = __update_model(model=model, ipc_chans=ipc_chans, is_active=is_active,
+            cur_active = __update_model(model=model, opt=opt, ipc_chans=ipc_chans, is_active=is_active,
                                         own_grads=None, own_samples=None)
 
         if send_each_epoch and epoch < epochs_count - 1:
