@@ -7,6 +7,9 @@ from typing import List, Callable, Iterable, Optional
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from distributed_ml.distributed.send_grads.messages import Message, EndMarker, Gradient
+import os
+from common.evaluation import calc_accuracy
+from torchvision.datasets.vision import VisionDataset
 
 
 def __check_sizes(model: torch.nn.Module, shards_grads: List[List[torch.Tensor]]) -> bool:
@@ -24,13 +27,17 @@ def __set_grads(model: torch.nn.Module, all_grads: List[List[torch.Tensor]], tot
     for cur_param, *cur_param_grads in zip(model.parameters(), *all_grads):
         result_grad = torch.zeros_like(cur_param)
         for cur_param_grad in cur_param_grads:
+            assert cur_param_grad.size() == cur_param.size()
             result_grad += cur_param_grad
-        cur_param.grad = result_grad / total_samples
+        if total_samples > 0:
+            cur_param.grad = result_grad / total_samples
+        else:
+            cur_param.grad.zero_()
 
 
 def __update_model(model: torch.nn.Module,
                    opt: torch.optim.Optimizer,
-                   ipc_chans: List[Queue], is_active: List[bool],
+                   recv_chans: List[Queue], is_active: List[bool],
                    own_samples: Optional[int], own_grads: Optional[List[torch.Tensor]]) -> int:
     all_grads = []
     if own_grads is not None:
@@ -42,7 +49,7 @@ def __update_model(model: torch.nn.Module,
         total_samples = 0
 
     next_active_count = 0
-    for i, cur_chan in enumerate(ipc_chans):
+    for i, cur_chan in enumerate(recv_chans):
         if is_active[i]:
             cur_msg_bytes = cur_chan.get()
             cur_msg = pickle.loads(cur_msg_bytes)
@@ -64,20 +71,21 @@ def __update_model(model: torch.nn.Module,
 def worker(model_bytes: bytes, epochs_count: int,
            opt_getter: Callable[[Iterable[torch.nn.Parameter]], torch.optim.Optimizer],
            train_shard: DatasetShard, train_batch_size: int,
-           ipc_chans: List[Queue],
+           test_dataset: VisionDataset, test_batch_size: int,
+           send_chans: List[Queue], recv_chans: List[Queue],
            master_send_chan: Connection, send_each_epoch: bool):
     model = pickle.loads(model_bytes)
     assert isinstance(model, torch.nn.Module)
     opt = opt_getter(model.parameters())
 
     for epoch in range(epochs_count):
-        model.train()
-        is_active = [True for _ in ipc_chans]
-        cur_active = len(ipc_chans)
+        assert len(send_chans) == len(recv_chans)
+        is_active = [True for _ in recv_chans]
+        cur_active = len(recv_chans)
         data_loader = DataLoader(dataset=train_shard, batch_size=train_batch_size, shuffle=True)
 
         for X, y in data_loader:
-            # print(f'Worker#{os.getpid()} started iteration')
+            model.train()
             assert len(X) == len(y) and len(X) > 0
             opt.zero_grad()
             y_hat = model(X)
@@ -85,21 +93,23 @@ def worker(model_bytes: bytes, epochs_count: int,
             loss.backward()
 
             cur_grads = [x.grad.detach().clone() for x in model.parameters()]
-            for cur_chan in ipc_chans:
+            for cur_chan in send_chans:
                 message = Gradient(grads=cur_grads, samples_count=len(X))
                 msg_bytes = pickle.dumps(message)
                 cur_chan.put(msg_bytes)
-            cur_active = __update_model(model=model, opt=opt, ipc_chans=ipc_chans, is_active=is_active,
+            cur_active = __update_model(model=model, opt=opt, recv_chans=recv_chans, is_active=is_active,
                                         own_grads=cur_grads, own_samples=len(X))
+            # acc = calc_accuracy(model=model, test_dataset=test_dataset, batch_size=test_batch_size)
+            # print(f'Worker#{os.getpid()}, acc = {acc}')
 
-        for cur_chan in ipc_chans:
+        for cur_chan in send_chans:
             message = EndMarker()
             msg_bytes = pickle.dumps(message)
             cur_chan.put(msg_bytes)
 
         while cur_active > 0:
             assert cur_active == sum(is_active)
-            cur_active = __update_model(model=model, opt=opt, ipc_chans=ipc_chans, is_active=is_active,
+            cur_active = __update_model(model=model, opt=opt, recv_chans=recv_chans, is_active=is_active,
                                         own_grads=None, own_samples=None)
 
         if send_each_epoch and epoch < epochs_count - 1:
