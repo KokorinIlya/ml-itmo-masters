@@ -15,6 +15,7 @@ class SendGradientsTrain:
                  optGetter: Callable[[Iterator[torch.nn.Parameter]], torch.optim.Optimizer],
                  train_shards: List[DatasetShard], test_dataset: VisionDataset,
                  gradient_processor: GradientProcessor = NopGradientProcessor(),
+                 use_error_correction: bool = False,
                  train_batch_size: int = 128, test_batch_size: int = 128,
                  save_grad_dist: bool = False):
         self.model = model
@@ -25,6 +26,14 @@ class SendGradientsTrain:
         self.train_batch_size = train_batch_size
         self.test_batch_size = test_batch_size
         self.gradient_processor = gradient_processor
+
+        if use_error_correction:
+            self.error_correction: Optional[List[List[torch.Tensor]]] = [
+                [torch.zeros_like(x) for x in model.parameters()]
+                for _ in range(len(train_shards))
+            ]
+        else:
+            self.error_correction: Optional[List[List[torch.Tensor]]] = None
 
         self.grad_dist: Optional[List[float]] = [] if save_grad_dist else None
         self.X: Optional[torch.Tensor] = None
@@ -45,7 +54,7 @@ class SendGradientsTrain:
         else:
             assert self.X is None and self.y is None
 
-    def __get_grad_single_shard(self,
+    def __get_grad_single_shard(self, shard_id: int,
                                 train_shard_iter: Iterator[Tuple[torch.Tensor,
                                                                  torch.Tensor]]) -> Tuple[List[torch.Tensor], int]:
         self.model.zero_grad()
@@ -56,8 +65,23 @@ class SendGradientsTrain:
             loss = F.cross_entropy(y_hat, y, reduction='sum')
             self.__add_X_y(X, y)
             loss.backward()
-            shard_grads = [x.grad.detach().clone() for x in self.model.parameters()]
-            return self.gradient_processor(shard_grads), len(X)
+
+            shard_grads: List[torch.Tensor] = [x.grad.detach().clone() for x in self.model.parameters()]
+
+            if self.error_correction is not None:
+                cur_shard_err_c = self.error_correction[shard_id]
+                assert len(cur_shard_err_c) == len(shard_grads)
+                for cur_param_grad, cur_param_err_c in zip(shard_grads, cur_shard_err_c):
+                    cur_param_grad += cur_param_err_c
+
+                processed_grads = self.gradient_processor(shard_grads)
+                assert len(processed_grads) == len(shard_grads)
+
+                for i, (cur_param_init_grad, cur_param_res_grad) in enumerate(zip(shard_grads, processed_grads)):
+                    cur_shard_err_c[i] = cur_param_init_grad - cur_param_res_grad
+                return processed_grads, len(X)
+            else:
+                return self.gradient_processor(shard_grads), len(X)
         except StopIteration:
             return [torch.zeros_like(x) for x in self.model.parameters()], 0
 
@@ -66,8 +90,8 @@ class SendGradientsTrain:
                                                          torch.Tensor]]]) -> Tuple[List[List[torch.Tensor]], int]:
         grads = []
         total_samples = 0
-        for shard_iter in train_iters:
-            cur_grad, samples_count = self.__get_grad_single_shard(shard_iter)
+        for shard_id, shard_iter in enumerate(train_iters):
+            cur_grad, samples_count = self.__get_grad_single_shard(shard_id, shard_iter)
             grads.append(cur_grad)
             total_samples += samples_count
         return grads, total_samples

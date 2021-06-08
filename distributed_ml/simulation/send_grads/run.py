@@ -24,10 +24,11 @@ def main():
         train_shards=train_shards, test_dataset=test_dataset,
         # gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
         # gradient_processor=TopKSparcifier(k=total_params // 5),
-        # gradient_processor=OneBitQuantizator(per_layer=True),
+        gradient_processor=OneBitQuantizator(per_layer=True),
         # gradient_processor=OneBitQuantizator(per_layer=False),
+        use_error_correction=False,
         train_batch_size=32,
-        save_grad_dist=True
+        # save_grad_dist=True
     )
     simulator.train()
     if simulator.grad_dist is not None:
