@@ -18,6 +18,12 @@ class DatasetShard(Dataset, Generic[T]):
     def __len__(self) -> int:
         return len(self.__indexes)
 
+    def batches_cnt(self, bath_size: int) -> int:
+        return (len(self) + bath_size - 1) // bath_size
+
+    def batch_steps_cnt(self, batch_size: int, batches_per_step: int) -> int:
+        return (self.batches_cnt(batch_size) + batches_per_step - 1) // batches_per_step
+
 
 def __get_shard_idx(idx: List[int], shard_id: int, shards_count: int, rows_per_shard: int) -> List[int]:
     idx_begin = rows_per_shard * shard_id
