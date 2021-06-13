@@ -8,8 +8,9 @@ def calc_accuracy(model: torch.nn.Module, test_dataset: VisionDataset, batch_siz
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     total_correct = 0
 
-    for X, y in test_loader:
-        y_hat = model(X).argmax(dim=1)
-        total_correct += (y_hat == y).sum().item()
+    with torch.no_grad():
+        for X, y in test_loader:
+            y_hat = model(X).argmax(dim=1)
+            total_correct += (y_hat == y).sum().item()
 
     return total_correct / len(test_dataset)

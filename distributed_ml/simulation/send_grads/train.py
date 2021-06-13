@@ -12,7 +12,7 @@ from torchvision.datasets.vision import VisionDataset
 
 class SendGradientsTrain:
     def __init__(self, model: torch.nn.Module, epochs: int,
-                 optGetter: Callable[[Iterator[torch.nn.Parameter]], torch.optim.Optimizer],
+                 opt_getter: Callable[[Iterator[torch.nn.Parameter]], torch.optim.Optimizer],
                  train_shards: List[DatasetShard], test_dataset: VisionDataset,
                  gradient_processor: GradientProcessor = NopGradientProcessor(),
                  use_error_correction: bool = False,
@@ -20,7 +20,7 @@ class SendGradientsTrain:
                  save_grad_dist: bool = False):
         self.model = model
         self.epochs = epochs
-        self.opt = optGetter(model.parameters())
+        self.opt = opt_getter(model.parameters())
         self.train_shards = train_shards
         self.test_dataset = test_dataset
         self.train_batch_size = train_batch_size

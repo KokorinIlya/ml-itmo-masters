@@ -20,15 +20,15 @@ def main():
 
     simulator = SendGradientsTrain(
         model=model, epochs=10,
-        optGetter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
+        opt_getter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
         train_shards=train_shards, test_dataset=test_dataset,
-        # gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
+        gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
         # gradient_processor=TopKSparcifier(k=total_params // 5),
-        gradient_processor=OneBitQuantizator(per_layer=True),
+        # gradient_processor=OneBitQuantizator(per_layer=True),
         # gradient_processor=OneBitQuantizator(per_layer=False),
-        use_error_correction=False,
+        use_error_correction=True,
         train_batch_size=32,
-        # save_grad_dist=True
+        save_grad_dist=False
     )
     simulator.train()
     if simulator.grad_dist is not None:
