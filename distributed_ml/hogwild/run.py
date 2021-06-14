@@ -8,12 +8,11 @@ import time
 
 
 def main():
-    torch.multiprocessing.set_start_method("spawn")
     train_dataset = load_cifar10(is_train=True, save_path='../../data')
     test_dataset = load_cifar10(is_train=False, save_path='../../data')
     sgd_params = {"lr": 0.1, "weight_decay": 0.0001, "momentum": 0.9}
     workers_count = 2
-    epochs = 2
+    epochs = 10
 
     model = ResNet(n=2)
     model.share_memory()
@@ -67,4 +66,5 @@ def main():
 
 
 if __name__ == '__main__':
+    torch.multiprocessing.set_start_method("spawn")
     main()

@@ -14,6 +14,7 @@ def train(model: torch.nn.Module,
           train_dataset: VisionDataset, train_batch_size: int,
           master_conn: Connection):
     opt = torch.optim.SGD(params=model.parameters(), **sgd_params)
+
     for epoch in range(epochs):
         model.train()
         torch.manual_seed(time.time_ns())
@@ -26,4 +27,5 @@ def train(model: torch.nn.Module,
             opt.step()
         master_conn.send(f'Worker#{worker_id} has finished epoch {epoch + 1}')
         msg = master_conn.recv()
-        print(f'Worker#{worker_id} has received <<{msg}>> from master')
+        print(f'Worker#{worker_id} has received message <<{msg}>> from master')
+    print(f'Worker#{worker_id} is exiting')
