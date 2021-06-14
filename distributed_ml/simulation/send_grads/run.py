@@ -3,9 +3,11 @@ from distributed_ml.sharding import shard_dataset
 from common.resnet import ResNet
 from distributed_ml.simulation.send_grads.train import SendGradientsTrain
 from distributed_ml.grad_processor.one_bit_quantizator import OneBitQuantizator
+from distributed_ml.grad_processor.k_means_quantizator import KMeansQuantizator, determine_size
 from distributed_ml.grad_processor.top_k_sparcifier import TopKSparcifier
 import torch
 import matplotlib.pyplot as plt
+from typing import Optional, Tuple
 
 
 def main():
@@ -22,11 +24,12 @@ def main():
         model=model, epochs=10,
         opt_getter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
         train_shards=train_shards, test_dataset=test_dataset,
-        gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
+        # gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
         # gradient_processor=TopKSparcifier(k=total_params // 5),
         # gradient_processor=OneBitQuantizator(per_layer=True),
         # gradient_processor=OneBitQuantizator(per_layer=False),
-        use_error_correction=True,
+        gradient_processor=KMeansQuantizator(size_determiner=determine_size),
+        use_error_correction=False,
         train_batch_size=32,
         save_grad_dist=False
     )
