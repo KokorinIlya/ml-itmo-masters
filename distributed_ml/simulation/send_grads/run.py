@@ -24,12 +24,12 @@ def main():
         model=model, epochs=10,
         opt_getter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
         train_shards=train_shards, test_dataset=test_dataset,
-        # gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
+        gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
         # gradient_processor=TopKSparcifier(k=total_params // 5),
         # gradient_processor=OneBitQuantizator(per_layer=True),
         # gradient_processor=OneBitQuantizator(per_layer=False),
-        gradient_processor=KMeansQuantizator(size_determiner=determine_size),
-        use_error_correction=False,
+        # gradient_processor=KMeansQuantizator(size_determiner=determine_size),
+        use_error_correction=True,
         train_batch_size=32,
         save_grad_dist=False
     )

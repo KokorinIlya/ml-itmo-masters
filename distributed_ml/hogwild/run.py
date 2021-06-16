@@ -15,6 +15,9 @@ def main():
     epochs = 10
 
     model = ResNet(n=2)
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters())
+    assert total_params == trainable_params
     model.share_memory()
 
     master_conns = []
@@ -34,7 +37,8 @@ def main():
                 "worker_id": worker_id,
                 "train_dataset": train_dataset,
                 "train_batch_size": 128,
-                "master_conn": worker_conns[worker_id]
+                "master_conn": worker_conns[worker_id],
+                "k": trainable_params // 5
             }
         )
         for worker_id in range(workers_count)
