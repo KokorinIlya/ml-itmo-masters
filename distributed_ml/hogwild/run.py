@@ -16,8 +16,9 @@ def main():
 
     model = ResNet(n=2)
     total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     assert total_params == trainable_params
+    print(total_params)
     model.share_memory()
 
     master_conns = []
@@ -38,7 +39,8 @@ def main():
                 "train_dataset": train_dataset,
                 "train_batch_size": 128,
                 "master_conn": worker_conns[worker_id],
-                "k": trainable_params // 5
+                "k": [p.numel() // 5 for p in model.parameters()],
+                "use_error_correction": True
             }
         )
         for worker_id in range(workers_count)

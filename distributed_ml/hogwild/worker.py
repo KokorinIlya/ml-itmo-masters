@@ -14,13 +14,14 @@ def train(model: torch.nn.Module,
           worker_id: int,
           train_dataset: VisionDataset, train_batch_size: int,
           master_conn: Connection,
-          k: Optional[Union[int, List[int]]] = None):
+          k: Optional[Union[int, List[int]]],
+          use_error_correction: bool):
     if k is not None:
         grad_processor = TopKSparcifier(k)
         lr = sgd_params['lr']
     else:
         opt = torch.optim.SGD(params=model.parameters(), **sgd_params)
-        grad_processor = None
+    err_c = [torch.zeros_like(p) for p in model.parameters()]
 
     for epoch in range(epochs):
         model.train()
@@ -32,10 +33,21 @@ def train(model: torch.nn.Module,
             loss = F.cross_entropy(y_hat, y)
             loss.backward()
 
-            if grad_processor is not None:
+            if k is not None:
                 grads: List[torch.Tensor] = [x.grad.detach().clone() for x in model.parameters()]
-                processed_grads = grad_processor(grads)
+
                 with torch.no_grad():
+                    if use_error_correction:
+                        for cur_grad, cur_grad_err_c in zip(grads, err_c):
+                            cur_grad += cur_grad_err_c
+
+                    # noinspection PyUnboundLocalVariable
+                    processed_grads = grad_processor(grads)
+
+                    if use_error_correction:
+                        for i, (true_grad, processed_grad) in enumerate(zip(grads, processed_grads)):
+                            err_c[i] = true_grad - processed_grad
+
                     for param, grad in zip(model.parameters(), processed_grads):
                         # noinspection PyUnboundLocalVariable
                         new_param = param - lr * grad
