@@ -1,13 +1,10 @@
 from common.cifar import load_cifar10
-from distributed_ml.sharding import shard_dataset
+from distributed_ml.sharding.dataset_sharding import shard_dataset
 from common.resnet import ResNet
 from distributed_ml.simulation.send_grads.train import SendGradientsTrain
-from distributed_ml.grad_processor.one_bit_quantizator import OneBitQuantizator
-from distributed_ml.grad_processor.k_means_quantizator import KMeansQuantizator, determine_size
 from distributed_ml.grad_processor.top_k_sparcifier import TopKSparcifier
 import torch
 import matplotlib.pyplot as plt
-from typing import Optional, Tuple
 
 
 def main():

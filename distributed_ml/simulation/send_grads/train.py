@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from common.evaluation import calc_accuracy
-from distributed_ml.sharding import DatasetShard
+from distributed_ml.sharding.dataset_sharding import DatasetShard
 from typing import List, Iterator, Tuple, Callable, Optional
 from distributed_ml.grad_processor.gradient_processor import GradientProcessor
 from distributed_ml.grad_processor.nop_gradient_processor import NopGradientProcessor

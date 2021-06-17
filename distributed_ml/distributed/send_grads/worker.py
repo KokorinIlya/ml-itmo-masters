@@ -1,14 +1,12 @@
 from multiprocessing.connection import Connection
 from multiprocessing import Queue
 import torch
-from distributed_ml.sharding import DatasetShard
+from distributed_ml.sharding.dataset_sharding import DatasetShard
 import pickle
 from typing import List, Callable, Iterable, Optional
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from distributed_ml.distributed.send_grads.messages import Message, EndMarker, Gradient
-import os
-from common.evaluation import calc_accuracy
 from torchvision.datasets.vision import VisionDataset
 
 

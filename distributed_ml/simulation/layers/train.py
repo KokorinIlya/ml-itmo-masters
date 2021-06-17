@@ -4,8 +4,9 @@ import torch.nn.functional as F
 from collections import OrderedDict
 from torch.utils.data import DataLoader
 from common.evaluation import calc_accuracy
-from typing import List, Iterator, Tuple, Callable, Dict
+from typing import List, Iterator, Tuple, Callable, Dict, Set
 from torchvision.datasets.vision import VisionDataset
+from common.checks import check_models
 
 
 class SendWeightsTrain:
@@ -13,7 +14,7 @@ class SendWeightsTrain:
                  epochs: int,
                  model_getter: Callable[[], torch.nn.Module],
                  opt_getter: Callable[[Iterator[torch.nn.Parameter]], torch.optim.Optimizer],
-                 shard_layers: List[List[str]],
+                 shard_layers: List[Set[str]],
                  test_dataset: VisionDataset,
                  train_dataset: VisionDataset,
                  learning_batch_count: int = 5,
@@ -32,12 +33,12 @@ class SendWeightsTrain:
         self.learning_batch_count = learning_batch_count
 
     def __get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
-                                   shard_id: int) -> Tuple[Dict[str, torch.Tensor], int]:
+                                   shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
         single_shard_layers = self.shard_layers[shard_id]
         model = self.models[shard_id]
         model.train()
         opt = self.opts[shard_id]
-        total_samples = 0
+        has_modified = False
 
         try:
             for _ in range(self.learning_batch_count):
@@ -53,34 +54,33 @@ class SendWeightsTrain:
                 loss.backward()
                 opt.step()
 
-                total_samples += len(X)
+                has_modified = True
         except StopIteration:
             pass
 
         single_shard_weights = {}
-        for name, x in model.named_parameters():
+        for name, weight in model.named_parameters():
             if name in single_shard_layers:
-                single_shard_weights[name] = x
+                single_shard_weights[name] = weight
 
-        return single_shard_weights, total_samples
+        return single_shard_weights, has_modified
 
     def __collect_weights(self, train_iters: List[Iterator[Tuple[torch.Tensor, torch.Tensor]]]) -> \
-            Tuple[List[Dict[str, torch.Tensor]], int]:
+            Tuple[List[Dict[str, torch.Tensor]], bool]:
         weights = []
-        total_samples = 0
+        has_modified = False
 
-        for shard_id in range(len(train_iters)):
-            train_iter = train_iters[shard_id]
-            cur_weights, samples_count = self.__get_single_shard_weights(train_iter, shard_id)
+        for shard_id, train_iter in enumerate(train_iters):
+            cur_weights, cur_has_modified = self.__get_single_shard_weights(train_iter, shard_id)
             weights.append(cur_weights)
-            assert total_samples == samples_count or total_samples == 0
-            total_samples = samples_count
-        return weights, total_samples
+            has_modified = has_modified or cur_has_modified
+        return weights, has_modified
 
     def __apply_weights(self, shard_weights: List[Dict[str, torch.Tensor]]) -> None:
         collected_weights = {}
         for single_shard_weights in shard_weights:
             for name, weights in single_shard_weights.items():
+                assert name not in collected_weights
                 collected_weights[name] = weights
 
         for model in self.models:
@@ -93,7 +93,7 @@ class SendWeightsTrain:
         train_start_time = time.time()
         acc = calc_accuracy(self.models[0], self.test_dataset, batch_size=self.test_batch_size)
         accs = [acc]
-        print("Initial acc = {0}".format(acc))
+        print(f'Initial acc = {acc}')
 
         for epoch in range(self.epochs):
             epoch_start_time = time.time()
@@ -104,22 +104,24 @@ class SendWeightsTrain:
                            for _ in range(len(self.models))]
 
             while True:
-                weights, total_samples = self.__collect_weights(train_iters)
-                if total_samples > 0:
+                weights, has_modified = self.__collect_weights(train_iters)
+                if has_modified:
                     self.__apply_weights(weights)
                 else:
                     break
 
-            acc = calc_accuracy(self.models[0], self.test_dataset, batch_size=self.test_batch_size)
+            base_model = self.models[0]
+            for cur_model in self.models[1:]:
+                assert check_models(base_model, cur_model)
+            acc = calc_accuracy(base_model, self.test_dataset, batch_size=self.test_batch_size)
             accs.append(acc)
 
             cur_time = time.time()
             epoch_time_spent = int(cur_time - epoch_start_time)
             total_time_spent = int(cur_time - train_start_time)
             print(
-                "Epochs passed = {0}, acc = {1}, seconds per epoch = {2}, total seconds elapsed = {3}".format(
-                    epoch + 1, acc, epoch_time_spent, total_time_spent
-                )
+                f'Epochs passed = {epoch + 1}, acc = {acc}, '
+                f'seconds per epoch = {epoch_time_spent}, total seconds elapsed = {total_time_spent}'
             )
 
         return accs

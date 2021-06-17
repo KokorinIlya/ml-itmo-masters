@@ -4,20 +4,11 @@ import torch
 from common.evaluation import calc_accuracy
 from torchvision.datasets.vision import VisionDataset
 import pickle
-from distributed_ml.sharding import shard_dataset, DatasetShard
+from distributed_ml.sharding.dataset_sharding import shard_dataset, DatasetShard
 import time
 from typing import List, Tuple, Dict, Callable, Iterable
 from multiprocessing.connection import Connection
-
-
-def __check_models(base_model: torch.nn.Module, cur_model: torch.nn.Module, eps: float = 1e-4) -> bool:
-    if len(list(base_model.parameters())) != len(list(cur_model.parameters())):
-        return False
-    for base_param, cur_param in zip(base_model.parameters(), cur_model.parameters()):
-        cur_dist = (base_param - cur_param).abs().sum()
-        if cur_dist > eps:
-            return False
-    return True
+from common.checks import check_models
 
 
 def __build_master_pipes(workers_count: int) -> List[Tuple[Connection, Connection]]:
@@ -114,7 +105,7 @@ def master(model: torch.nn.Module, workers_count: int, epochs_count: int,
                 base_model = cur_model
             else:
                 assert i > 0
-                assert __check_models(base_model, cur_model), \
+                assert check_models(base_model, cur_model), \
                     f"Model from worker#{i} differs from the model from worker#0"
 
         acc = calc_accuracy(model=base_model, test_dataset=test_dataset, batch_size=test_batch_size)
