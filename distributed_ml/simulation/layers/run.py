@@ -12,7 +12,7 @@ def main():
     shard_layers = shard_model(model, shards_count=4)
 
     simulator = SendWeightsTrain(
-        epochs=10,
+        epochs=20,
         learning_batch_count=5,
         model_getter=lambda: ResNet(2),
         opt_getter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
