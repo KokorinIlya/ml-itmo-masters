@@ -37,13 +37,13 @@ def __update_model(model: torch.nn.Module,
                    opt: torch.optim.Optimizer,
                    recv_chans: List[Queue], is_active: List[bool],
                    own_samples: Optional[int], own_grads: Optional[List[torch.Tensor]]) -> int:
-    all_grads = []
     if own_grads is not None:
         assert own_samples is not None
-        all_grads.append(own_grads)
+        all_grads = [own_grads]
         total_samples = own_samples
     else:
         assert own_samples is None
+        all_grads = []
         total_samples = 0
 
     next_active_count = 0
@@ -52,14 +52,15 @@ def __update_model(model: torch.nn.Module,
             cur_msg_bytes = cur_chan.get()
             cur_msg = pickle.loads(cur_msg_bytes)
             assert isinstance(cur_msg, Message)
-            if type(cur_msg) is EndMarker:
-                is_active[i] = False
-            else:
+            if type(cur_msg) is Gradient:
                 next_active_count += 1
-                assert type(cur_msg) is Gradient
-                cur_msg: Gradient = cur_msg
+                # noinspection PyUnresolvedReferences
                 all_grads.append(cur_msg.grads)
+                # noinspection PyUnresolvedReferences
                 total_samples += cur_msg.samples_count
+            else:
+                assert type(cur_msg) is EndMarker
+                is_active[i] = False
     assert __check_sizes(model, all_grads)
     __set_grads(model, all_grads, total_samples)
     opt.step()

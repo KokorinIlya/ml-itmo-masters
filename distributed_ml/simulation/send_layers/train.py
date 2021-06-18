@@ -9,7 +9,7 @@ from torchvision.datasets.vision import VisionDataset
 from common.checks import check_models
 
 
-class SendWeightsTrain:
+class SendLayersTrain:
     def __init__(self,
                  epochs: int,
                  model_getter: Callable[[], torch.nn.Module],
@@ -103,8 +103,10 @@ class SendWeightsTrain:
             for model in self.models:
                 model.train()
 
-            train_iters = [iter(DataLoader(self.train_dataset, batch_size=self.train_batch_size, shuffle=True))
-                           for _ in range(len(self.models))]
+            train_iters = [
+                iter(DataLoader(self.train_dataset, batch_size=self.train_batch_size, shuffle=True))
+                for _ in range(len(self.models))
+            ]
 
             while True:
                 weights, has_modified = self.__collect_weights(train_iters)

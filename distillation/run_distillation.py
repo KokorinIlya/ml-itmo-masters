@@ -40,8 +40,8 @@ def parse_args():
                                                       'train - train the new model from scratch\n'
                                                       'continue - continue training of the existing model\n'
                                                       'eval - evaluate the accuracy of the existing model')
-    parser.add_argument("--layers", required=True, type=int,
-                        help='Number of layers in the model, being trained or evaluated')
+    parser.add_argument("--send_layers", required=True, type=int,
+                        help='Number of send_layers in the model, being trained or evaluated')
     parser.add_argument("--name", required=True, help='Name of the model, being trained or evaluated')
 
     parser.add_argument("--epochs", required=False, type=int,
@@ -52,7 +52,7 @@ def parse_args():
     parser.add_argument("--teacher_name", required=False,
                         help='Name of the teacher mode. Required if use_teacher is set to True')
     parser.add_argument("--teacher_layers", required=False, type=int,
-                        help='Number of layers in the teacher model. Required if use_teacher is set to True')
+                        help='Number of send_layers in the teacher model. Required if use_teacher is set to True')
     return parser.parse_args()
 
 

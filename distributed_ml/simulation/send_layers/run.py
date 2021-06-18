@@ -1,7 +1,7 @@
 from common.cifar import load_cifar10
 from distributed_ml.sharding.model_sharding import shard_model
 from common.resnet import ResNet
-from distributed_ml.simulation.layers.train import SendWeightsTrain
+from distributed_ml.simulation.send_layers.train import SendLayersTrain
 import torch
 
 
@@ -11,13 +11,13 @@ def main():
     model = ResNet(2)
     shard_layers = shard_model(model, shards_count=4)
 
-    simulator = SendWeightsTrain(
+    simulator = SendLayersTrain(
         epochs=20,
         learning_batch_count=5,
         model_getter=lambda: ResNet(2),
         opt_getter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
         shard_layers=shard_layers,
-        train_dataset=train_dataset,
+        train_dataset=train_dataset,  # TODO: try to shard the dataset
         test_dataset=test_dataset
     )
     simulator.train()
