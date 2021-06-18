@@ -1,13 +1,13 @@
 from multiprocessing.connection import Connection
 from multiprocessing import Queue
 import torch
-from distributed_ml.sharding.dataset_sharding import DatasetShard
 import pickle
 from typing import List, Callable, Iterable, Optional
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from distributed_ml.distributed.send_grads.messages import Message, EndMarker, Gradient
 from torchvision.datasets.vision import VisionDataset
+from torch.utils.data import Dataset
 
 
 def __check_sizes(model: torch.nn.Module, shards_grads: List[List[torch.Tensor]]) -> bool:
@@ -69,7 +69,7 @@ def __update_model(model: torch.nn.Module,
 
 def worker(model_bytes: bytes, epochs_count: int,
            opt_getter: Callable[[Iterable[torch.nn.Parameter]], torch.optim.Optimizer],
-           train_shard: DatasetShard, train_batch_size: int,
+           train_shard: Dataset, train_batch_size: int,
            test_dataset: VisionDataset, test_batch_size: int,
            send_chans: List[Queue], recv_chans: List[Queue],
            master_send_chan: Connection, send_each_epoch: bool):

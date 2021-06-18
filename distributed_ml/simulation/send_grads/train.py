@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from common.evaluation import calc_accuracy
-from distributed_ml.sharding.dataset_sharding import DatasetShard
+from torch.utils.data import Dataset
 from typing import List, Iterator, Tuple, Callable, Optional
 from distributed_ml.grad_processor.gradient_processor import GradientProcessor
 from distributed_ml.grad_processor.nop_gradient_processor import NopGradientProcessor
@@ -13,7 +13,7 @@ from torchvision.datasets.vision import VisionDataset
 class SendGradientsTrain:
     def __init__(self, model: torch.nn.Module, epochs: int,
                  opt_getter: Callable[[Iterator[torch.nn.Parameter]], torch.optim.Optimizer],
-                 train_shards: List[DatasetShard], test_dataset: VisionDataset,
+                 train_shards: List[Dataset], test_dataset: VisionDataset,
                  gradient_processor: GradientProcessor = NopGradientProcessor(),
                  use_error_correction: bool = False,
                  train_batch_size: int = 128, test_batch_size: int = 128,

@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from common.evaluation import calc_accuracy
 from typing import List, Iterator, Tuple, Callable, Dict, Set
 from torchvision.datasets.vision import VisionDataset
+from torch.utils.data import Dataset
 from common.checks import check_models
 
 
@@ -16,7 +17,7 @@ class SendLayersTrain:
                  opt_getter: Callable[[Iterator[torch.nn.Parameter]], torch.optim.Optimizer],
                  shard_layers: List[Set[str]],
                  test_dataset: VisionDataset,
-                 train_dataset: VisionDataset,
+                 train_shards: List[Dataset],
                  learning_batch_count: int = 5,
                  train_batch_size: int = 128,
                  test_batch_size: int = 128):
@@ -26,7 +27,7 @@ class SendLayersTrain:
         self.opt_getter = opt_getter
         self.opts = [opt_getter(model.parameters()) for model in self.models]
         self.shard_layers = shard_layers
-        self.train_dataset = train_dataset
+        self.train_shards = train_shards
         self.test_dataset = test_dataset
         self.train_batch_size = train_batch_size
         self.test_batch_size = test_batch_size
@@ -104,8 +105,8 @@ class SendLayersTrain:
                 model.train()
 
             train_iters = [
-                iter(DataLoader(self.train_dataset, batch_size=self.train_batch_size, shuffle=True))
-                for _ in range(len(self.models))
+                iter(DataLoader(cur_train_shard, batch_size=self.train_batch_size, shuffle=True))
+                for cur_train_shard in self.train_shards
             ]
 
             while True:

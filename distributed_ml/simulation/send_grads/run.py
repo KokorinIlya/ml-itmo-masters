@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 def main():
     train_dataset = load_cifar10(is_train=True, save_path='../../../data')
     test_dataset = load_cifar10(is_train=False, save_path='../../../data')
-    train_shards = shard_dataset(train_dataset, shards_count=4, shuffle=True)
+    train_shards = shard_dataset(train_dataset, shards_count=4, mode='shuffle_shard')
     model = ResNet(2)
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -22,11 +22,11 @@ def main():
         model=model, epochs=10,
         opt_getter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
         train_shards=train_shards, test_dataset=test_dataset,
-        # gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
+        gradient_processor=TopKSparcifier(k=[p.numel() // 5 for p in model.parameters()]),
         # gradient_processor=TopKSparcifier(k=total_params // 5),
         # gradient_processor=OneBitQuantizator(per_layer=True),
         # gradient_processor=OneBitQuantizator(per_layer=False),
-        gradient_processor=KMeansQuantizator(size_determiner=determine_size),
+        # gradient_processor=KMeansQuantizator(size_determiner=determine_size),
         use_error_correction=True,
         train_batch_size=32,
         save_grad_dist=False
