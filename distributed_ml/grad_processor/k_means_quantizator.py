@@ -1,16 +1,21 @@
-from typing import Callable, Tuple, List, Optional
+from typing import Callable, Tuple, List, Optional, Iterable
 import torch
 from distributed_ml.grad_processor.gradient_processor import GradientProcessor
 from sklearn.cluster import KMeans
 
 
-def determine_size(grad_size: torch.Size, dim_reducer=5) -> Optional[Tuple[int, int, int]]:
-    if len(grad_size) == 1:
+def __get_prod(lst: Iterable[int]) -> int:
+    res = 1
+    for x in lst:
+        res *= x
+    return res
+
+
+def determine_size(grad_size: torch.Size, dim_reducer=100) -> Optional[Tuple[int, int, int]]:
+    if len(grad_size) != 4:
         return None
-    n = grad_size[0]
-    m = 1
-    for cur_dim in grad_size[1:]:
-        m *= cur_dim
+    n = __get_prod(grad_size[:2])
+    m = __get_prod(grad_size[2:])
     if n < dim_reducer:
         k = 1
     else:
