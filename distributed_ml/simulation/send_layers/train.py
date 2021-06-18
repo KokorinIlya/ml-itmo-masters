@@ -18,9 +18,10 @@ class SendLayersTrain:
                  shard_layers: List[Set[str]],
                  test_dataset: VisionDataset,
                  train_shards: List[Dataset],
-                 learning_batch_count: int = 5,
+                 train_steps: int = 5,
                  train_batch_size: int = 128,
                  test_batch_size: int = 128):
+        assert len(shard_layers) == len(train_shards)
         self.models: List[torch.nn.Module] = [model_getter() for _ in range(len(shard_layers))]
         self.epochs = epochs
         self.layer_order = [name for name, _ in self.models[0].named_parameters()]
@@ -31,7 +32,7 @@ class SendLayersTrain:
         self.test_dataset = test_dataset
         self.train_batch_size = train_batch_size
         self.test_batch_size = test_batch_size
-        self.learning_batch_count = learning_batch_count
+        self.train_steps = train_steps
 
     def __get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
                                    shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
@@ -42,7 +43,7 @@ class SendLayersTrain:
         has_modified = False
 
         try:
-            for _ in range(self.learning_batch_count):
+            for _ in range(self.train_steps):
                 X, y = next(train_iter)
                 assert len(X) == len(y) and len(X) > 0
 

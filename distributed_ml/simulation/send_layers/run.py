@@ -15,7 +15,7 @@ def main():
 
     simulator = SendLayersTrain(
         epochs=20,
-        learning_batch_count=5,
+        train_steps=5,
         model_getter=lambda: ResNet(2),
         opt_getter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
         shard_layers=shard_layers,
