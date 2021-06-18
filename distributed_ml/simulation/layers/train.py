@@ -34,7 +34,7 @@ class SendWeightsTrain:
 
     def __get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
                                    shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
-        single_shard_layers = self.shard_layers[shard_id]
+        cur_shard_layers = self.shard_layers[shard_id]
         model = self.models[shard_id]
         model.train()
         opt = self.opts[shard_id]
@@ -47,7 +47,7 @@ class SendWeightsTrain:
 
                 model.zero_grad()
                 for name, p in model.named_parameters():
-                    p.requires_grad = name in single_shard_layers
+                    p.requires_grad = name in cur_shard_layers
 
                 y_hat = model(X)
                 loss = F.cross_entropy(y_hat, y)
@@ -58,12 +58,13 @@ class SendWeightsTrain:
         except StopIteration:
             pass
 
-        single_shard_weights = {}
+        cur_shard_weights = {}
         for name, weight in model.named_parameters():
-            if name in single_shard_layers:
-                single_shard_weights[name] = weight
+            assert name not in cur_shard_weights
+            if name in cur_shard_layers:
+                cur_shard_weights[name] = weight
 
-        return single_shard_weights, has_modified
+        return cur_shard_weights, has_modified
 
     def __collect_weights(self, train_iters: List[Iterator[Tuple[torch.Tensor, torch.Tensor]]]) -> \
             Tuple[List[Dict[str, torch.Tensor]], bool]:
@@ -84,8 +85,10 @@ class SendWeightsTrain:
                 collected_weights[name] = weights
 
         for model in self.models:
-            state_dict = OrderedDict([(layer_name, collected_weights[layer_name].detach().clone())
-                                      for layer_name in self.layer_order])
+            state_dict = OrderedDict([
+                (layer_name, collected_weights[layer_name].detach().clone())
+                for layer_name in self.layer_order
+            ])
             model.load_state_dict(state_dict, strict=False)
         self.opts = [self.opt_getter(model.parameters()) for model in self.models]
 
