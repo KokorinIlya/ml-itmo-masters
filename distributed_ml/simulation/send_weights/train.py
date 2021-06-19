@@ -1,34 +1,24 @@
 import torch
 import torch.nn.functional as F
-from typing import List, Iterator, Tuple, Callable, Dict, Set
+from typing import List, Iterator, Tuple, Callable, Dict
+from distributed_ml.simulation.common.abstract_send_weights import AbstractSendWeightsTrain
 from torchvision.datasets.vision import VisionDataset
 from torch.utils.data import Dataset
-from distributed_ml.simulation.common.abstract_send_weights import AbstractSendWeightsTrain
 
 
-class SendLayersTrain(AbstractSendWeightsTrain):
-    def __init__(self,
-                 epochs: int,
-                 models: List[torch.nn.Module],
+class SendWeightsTrain(AbstractSendWeightsTrain):
+    def __init__(self, epochs: int, models: List[torch.nn.Module],
                  opt_getter: Callable[[Iterator[torch.nn.Parameter]], torch.optim.Optimizer],
-                 shard_layers: List[Set[str]],
-                 test_dataset: VisionDataset,
-                 train_shards: List[Dataset],
-                 train_steps: int = 5,
-                 train_batch_size: int = 128,
-                 test_batch_size: int = 128):
+                 test_dataset: VisionDataset, train_shards: List[Dataset], train_steps: int = 5,
+                 train_batch_size: int = 128, test_batch_size: int = 128):
         AbstractSendWeightsTrain.__init__(self, epochs=epochs, models=models,
                                           opt_getter=opt_getter,
                                           train_shards=train_shards, test_dataset=test_dataset,
                                           train_batch_size=train_batch_size, test_batch_size=test_batch_size)
-
-        assert len(shard_layers) == len(train_shards)
-        self.shard_layers = shard_layers
         self.train_steps = train_steps
 
     def __get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
                                    shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
-        cur_shard_layers = self.shard_layers[shard_id]
         model = self.models[shard_id]
         model.train()
         opt = self.opts[shard_id]
@@ -40,9 +30,6 @@ class SendLayersTrain(AbstractSendWeightsTrain):
                 assert len(X) == len(y) and len(X) > 0
 
                 model.zero_grad()
-                for name, p in model.named_parameters():
-                    p.requires_grad = name in cur_shard_layers
-
                 y_hat = model(X)
                 loss = F.cross_entropy(y_hat, y)
                 loss.backward()
@@ -55,8 +42,7 @@ class SendLayersTrain(AbstractSendWeightsTrain):
         cur_shard_weights = {}
         for name, weight in model.named_parameters():
             assert name not in cur_shard_weights
-            if name in cur_shard_layers:
-                cur_shard_weights[name] = weight
+            cur_shard_weights[name] = weight
 
         return cur_shard_weights, has_modified
 
@@ -71,11 +57,30 @@ class SendLayersTrain(AbstractSendWeightsTrain):
             has_modified = has_modified or cur_has_modified
         return weights, has_modified
 
+    @staticmethod
+    def __check_weights(shard_weights: List[Dict[str, torch.Tensor]]) -> bool:
+        base_weights = shard_weights[0]
+        for cur_weights in shard_weights[1:]:
+            if cur_weights.keys() != base_weights.keys():
+                return False
+            for weight_name, base_weight in base_weights.items():
+                assert weight_name in cur_weights
+                cur_weight = cur_weights[weight_name]
+                if cur_weight.size() != base_weight.size():
+                    return False
+        return True
+
     def _apply_weights(self, shard_weights: List[Dict[str, torch.Tensor]]) -> None:
+        assert SendWeightsTrain.__check_weights(shard_weights)
         collected_weights = {}
-        for single_shard_weights in shard_weights:
-            for name, weights in single_shard_weights.items():
-                assert name not in collected_weights
-                collected_weights[name] = weights
+
+        with torch.no_grad():
+            base_weights = shard_weights[0]
+            for cur_weight_name in base_weights.keys():
+                result_weight = torch.zeros_like(base_weights[cur_weight_name])
+                for cur_shard_weights in shard_weights:
+                    result_weight += cur_shard_weights[cur_weight_name]
+                assert cur_weight_name not in collected_weights
+                collected_weights[cur_weight_name] = result_weight / len(shard_weights)
 
         self._load_weights(collected_weights)
