@@ -31,9 +31,20 @@ class AbstractSendWeightsTrain:
         self.test_batch_size = test_batch_size
 
     @abstractmethod
+    def _get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
+                                  shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
+        pass
+
     def _collect_weights(self, train_iters: List[Iterator[Tuple[torch.Tensor, torch.Tensor]]]) -> \
             Tuple[List[Dict[str, torch.Tensor]], bool]:
-        pass
+        weights = []
+        has_modified = False
+
+        for shard_id, train_iter in enumerate(train_iters):
+            cur_weights, cur_has_modified = self._get_single_shard_weights(train_iter, shard_id)
+            weights.append(cur_weights)
+            has_modified = has_modified or cur_has_modified
+        return weights, has_modified
 
     @abstractmethod
     def _apply_weights(self, shard_weights: List[Dict[str, torch.Tensor]]) -> None:

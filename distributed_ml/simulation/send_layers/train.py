@@ -26,8 +26,8 @@ class SendLayersTrain(AbstractSendWeightsTrain):
         self.shard_layers = shard_layers
         self.train_steps = train_steps
 
-    def __get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
-                                   shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
+    def _get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
+                                  shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
         cur_shard_layers = self.shard_layers[shard_id]
         model = self.models[shard_id]
         model.train()
@@ -59,17 +59,6 @@ class SendLayersTrain(AbstractSendWeightsTrain):
                 cur_shard_weights[name] = weight
 
         return cur_shard_weights, has_modified
-
-    def _collect_weights(self, train_iters: List[Iterator[Tuple[torch.Tensor, torch.Tensor]]]) -> \
-            Tuple[List[Dict[str, torch.Tensor]], bool]:
-        weights = []
-        has_modified = False
-
-        for shard_id, train_iter in enumerate(train_iters):
-            cur_weights, cur_has_modified = self.__get_single_shard_weights(train_iter, shard_id)
-            weights.append(cur_weights)
-            has_modified = has_modified or cur_has_modified
-        return weights, has_modified
 
     def _apply_weights(self, shard_weights: List[Dict[str, torch.Tensor]]) -> None:
         collected_weights = {}

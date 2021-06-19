@@ -17,8 +17,8 @@ class SendWeightsTrain(AbstractSendWeightsTrain):
                                           train_batch_size=train_batch_size, test_batch_size=test_batch_size)
         self.train_steps = train_steps
 
-    def __get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
-                                   shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
+    def _get_single_shard_weights(self, train_iter: Iterator[Tuple[torch.Tensor, torch.Tensor]],
+                                  shard_id: int) -> Tuple[Dict[str, torch.Tensor], bool]:
         model = self.models[shard_id]
         model.train()
         opt = self.opts[shard_id]
@@ -45,17 +45,6 @@ class SendWeightsTrain(AbstractSendWeightsTrain):
             cur_shard_weights[name] = weight
 
         return cur_shard_weights, has_modified
-
-    def _collect_weights(self, train_iters: List[Iterator[Tuple[torch.Tensor, torch.Tensor]]]) -> \
-            Tuple[List[Dict[str, torch.Tensor]], bool]:
-        weights = []
-        has_modified = False
-
-        for shard_id, train_iter in enumerate(train_iters):
-            cur_weights, cur_has_modified = self.__get_single_shard_weights(train_iter, shard_id)
-            weights.append(cur_weights)
-            has_modified = has_modified or cur_has_modified
-        return weights, has_modified
 
     @staticmethod
     def __check_weights(shard_weights: List[Dict[str, torch.Tensor]]) -> bool:
