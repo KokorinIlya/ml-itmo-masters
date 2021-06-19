@@ -12,7 +12,7 @@ def main():
     train_shards = shard_dataset(dataset=train_dataset, shards_count=shards_count, mode='shuffle_shard')
 
     simulator = SendWeightsTrain(
-        epochs=10,
+        epochs=20,
         train_steps=5,
         models=[ResNet(2) for _ in range(shards_count)],
         opt_getter=lambda params: torch.optim.SGD(params, lr=0.1, weight_decay=0.0001, momentum=0.9),
