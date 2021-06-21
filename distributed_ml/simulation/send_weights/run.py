@@ -9,7 +9,7 @@ def main():
     train_dataset = load_cifar10(is_train=True, save_path='../../../data')
     test_dataset = load_cifar10(is_train=False, save_path='../../../data')
     shards_count = 4
-    train_shards = shard_dataset(dataset=train_dataset, shards_count=shards_count, mode='shuffle_shard')
+    train_shards = shard_dataset(dataset=train_dataset, shards_count=shards_count, mode='replicate')
 
     simulator = SendWeightsTrain(
         epochs=20,

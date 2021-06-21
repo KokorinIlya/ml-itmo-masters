@@ -68,20 +68,21 @@ class SendGradientsTrain:
 
             shard_grads: List[torch.Tensor] = [x.grad.detach().clone() for x in self.model.parameters()]
 
-            if self.error_correction is not None:
-                cur_shard_err_c = self.error_correction[shard_id]
-                assert len(cur_shard_err_c) == len(shard_grads)
-                for cur_param_grad, cur_param_err_c in zip(shard_grads, cur_shard_err_c):
-                    cur_param_grad += cur_param_err_c
+            with torch.no_grad():
+                if self.error_correction is not None:
+                    cur_shard_err_c = self.error_correction[shard_id]
+                    assert len(cur_shard_err_c) == len(shard_grads)
+                    for cur_param_grad, cur_param_err_c in zip(shard_grads, cur_shard_err_c):
+                        cur_param_grad += cur_param_err_c
 
-                processed_grads = self.gradient_processor(shard_grads)
-                assert len(processed_grads) == len(shard_grads)
+                    processed_grads = self.gradient_processor(shard_grads)
+                    assert len(processed_grads) == len(shard_grads)
 
-                for i, (cur_param_init_grad, cur_param_res_grad) in enumerate(zip(shard_grads, processed_grads)):
-                    cur_shard_err_c[i] = cur_param_init_grad - cur_param_res_grad
-                return processed_grads, len(X)
-            else:
-                return self.gradient_processor(shard_grads), len(X)
+                    for i, (cur_param_init_grad, cur_param_res_grad) in enumerate(zip(shard_grads, processed_grads)):
+                        cur_shard_err_c[i] = cur_param_init_grad - cur_param_res_grad
+                    return processed_grads, len(X)
+                else:
+                    return self.gradient_processor(shard_grads), len(X)
         except StopIteration:
             return [torch.zeros_like(x) for x in self.model.parameters()], 0
 
