@@ -5,7 +5,7 @@ from distributed_ml.simulation.send_grads.train import SendGradientsTrain
 from distributed_ml.grad_processor.top_k_sparcifier import TopKSparcifier
 from distributed_ml.grad_processor.one_bit_quantizator import OneBitQuantizator
 from distributed_ml.grad_processor.k_means_quantizator import KMeansQuantizator, determine_size_per_layer, \
-    determine_size_total
+    determine_size_total_cut_reminder, determine_size_total_no_cut
 import torch
 import matplotlib.pyplot as plt
 
@@ -28,7 +28,7 @@ def main():
         # gradient_processor=TopKSparcifier(k=total_params // 5),
         # gradient_processor=OneBitQuantizator(per_layer=True),
         # gradient_processor=OneBitQuantizator(per_layer=False),
-        gradient_processor=KMeansQuantizator(per_layer=False, size_determiner=determine_size_total),
+        gradient_processor=KMeansQuantizator(per_layer=False, size_determiner=determine_size_total_cut_reminder),
         use_error_correction=True,
         train_batch_size=32,
         save_grad_dist=False
