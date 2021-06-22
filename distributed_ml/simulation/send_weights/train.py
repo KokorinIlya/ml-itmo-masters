@@ -39,12 +39,7 @@ class SendWeightsTrain(AbstractSendWeightsTrain):
         except StopIteration:
             pass
 
-        cur_shard_weights = {}
-        for name, weight in model.named_parameters():
-            assert name not in cur_shard_weights
-            cur_shard_weights[name] = weight
-
-        return cur_shard_weights, has_modified
+        return dict(model.named_parameters()), has_modified
 
     @staticmethod
     def __check_weights(shard_weights: List[Dict[str, torch.Tensor]]) -> bool:
