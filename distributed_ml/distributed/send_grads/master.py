@@ -4,7 +4,7 @@ import torch
 from common.evaluation import calc_accuracy
 from torchvision.datasets.vision import VisionDataset
 import pickle
-from distributed_ml.sharding.dataset_sharding import shard_dataset
+from distributed_ml.sharding.dataset_sharding import shard_dataset, ShardingMode
 import time
 from typing import List, Tuple, Dict, Callable, Iterable
 from multiprocessing.connection import Connection
@@ -78,7 +78,7 @@ def master(model: torch.nn.Module, workers_count: int, epochs_count: int,
            train_dataset: VisionDataset, train_batch_size: int,
            test_dataset: VisionDataset, test_batch_size: int = 128,
            send_each_epoch: bool = True):
-    train_shards = shard_dataset(dataset=train_dataset, shards_count=workers_count, mode='shuffle_shard')
+    train_shards = shard_dataset(dataset=train_dataset, shards_count=workers_count, mode=ShardingMode.SHUFFLE_SHARD)
     master_pipes = __build_master_pipes(workers_count)
     ipc_pipes = __build_ipc_pipes(workers_count)
     workers = __build_workers(model=model, epochs_count=epochs_count, workers_count=workers_count,
