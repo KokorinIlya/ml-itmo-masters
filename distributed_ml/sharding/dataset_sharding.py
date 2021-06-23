@@ -1,9 +1,17 @@
+from enum import Enum
+
 from torch.utils.data import Dataset
 import random
 from typing import List, Generic, TypeVar
 from torchvision.datasets.vision import VisionDataset
 
 T = TypeVar('T', covariant=True)
+
+
+class ShardingMode(Enum):
+    SHARD = 'shard'
+    SHUFFLE_SHARD = 'shuffle_shard'
+    REPLICATE = 'replicate'
 
 
 class DatasetShard(Dataset, Generic[T]):
@@ -28,9 +36,8 @@ def __get_shard_idx(idx: List[int], shard_id: int, shards_count: int, rows_per_s
     return idx[idx_begin:idx_end]
 
 
-def shard_dataset(dataset: VisionDataset, shards_count: int, mode: str) -> List[Dataset]:
-    assert mode in {'shard', 'shuffle_shard', 'replicate'}
-    if mode == 'replicate':
+def shard_dataset(dataset: VisionDataset, shards_count: int, mode: ShardingMode) -> List[Dataset]:
+    if mode == ShardingMode.REPLICATE:
         return [dataset for _ in range(shards_count)]
     else:
         n = len(dataset)
@@ -38,9 +45,7 @@ def shard_dataset(dataset: VisionDataset, shards_count: int, mode: str) -> List[
         if n % shards_count > 0:
             rows_per_shard += 1
         idx = list(range(n))
-        if mode == 'shuffle_shard':
+        if mode == ShardingMode.SHUFFLE_SHARD:
             random.shuffle(idx)
-        else:
-            assert mode == 'shard'
         shard_idx = [__get_shard_idx(idx, i, shards_count, rows_per_shard) for i in range(shards_count)]
         return [DatasetShard(dataset=dataset, indexes=cur_idx) for cur_idx in shard_idx]

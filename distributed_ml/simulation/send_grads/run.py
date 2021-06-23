@@ -1,5 +1,5 @@
 from common.cifar import load_cifar10
-from distributed_ml.sharding.dataset_sharding import shard_dataset
+from distributed_ml.sharding.dataset_sharding import shard_dataset, ShardingMode
 from common.resnet import ResNet
 from distributed_ml.simulation.send_grads.train import SendGradientsTrain
 from distributed_ml.grad_processor.top_k_sparcifier import TopKSparcifier
@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 def main():
     train_dataset = load_cifar10(is_train=True, save_path='../../../data')
     test_dataset = load_cifar10(is_train=False, save_path='../../../data')
-    train_shards = shard_dataset(train_dataset, shards_count=4, mode='shuffle_shard')
+    train_shards = shard_dataset(train_dataset, shards_count=4, mode=ShardingMode.SHUFFLE_SHARD)
     model = ResNet(2)
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
