@@ -15,7 +15,7 @@ class StochasticQuantizator(GradientProcessor):
     def __process(self, flattened_layer):
         norm = flattened_layer.square().sum().sqrt()
         one_chunk_len = 2 / self.chunk_count
-        norm_component = (flattened_layer / norm)
+        norm_component = flattened_layer / norm
 
         chunk_count_to_component = ((norm_component + 1) / one_chunk_len).floor()  # from -1
         component_left_bound = (chunk_count_to_component * one_chunk_len) - 1
@@ -23,7 +23,7 @@ class StochasticQuantizator(GradientProcessor):
         if self.random_bound:
             # random bound - [x, component, y]; y - x = one_chunk_len; prob for y = (component - x) / (y - x)
             prob_for_right_bound = (norm_component - component_left_bound) / one_chunk_len
-            right_additional = (torch.rand(size=flattened_layer.size()) > prob_for_right_bound).int() * one_chunk_len
+            right_additional = (torch.rand(size=flattened_layer.size()) < prob_for_right_bound).int() * one_chunk_len
         else:
             # nearest bound
             right_additional = ((norm_component - component_left_bound) > one_chunk_len / 2).int() * one_chunk_len
