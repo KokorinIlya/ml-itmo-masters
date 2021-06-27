@@ -5,6 +5,8 @@ from distributed_ml.simulation.common.abstract_send_weights import AbstractSendW
 from torchvision.datasets.vision import VisionDataset
 from torch.utils.data import Dataset
 
+from distributed_ml.simulation.common.utils import get_avg_weights
+
 
 class SendWeightsTrain(AbstractSendWeightsTrain):
     def __init__(self, epochs: int, models: List[torch.nn.Module],
@@ -39,12 +41,7 @@ class SendWeightsTrain(AbstractSendWeightsTrain):
         except StopIteration:
             pass
 
-        cur_shard_weights = {}
-        for name, weight in model.named_parameters():
-            assert name not in cur_shard_weights
-            cur_shard_weights[name] = weight
-
-        return cur_shard_weights, has_modified
+        return dict(model.named_parameters()), has_modified
 
     @staticmethod
     def __check_weights(shard_weights: List[Dict[str, torch.Tensor]]) -> bool:
@@ -61,15 +58,6 @@ class SendWeightsTrain(AbstractSendWeightsTrain):
 
     def _apply_weights(self, shard_weights: List[Dict[str, torch.Tensor]]) -> None:
         assert SendWeightsTrain.__check_weights(shard_weights)
-        collected_weights = {}
-
-        with torch.no_grad():
-            base_weights = shard_weights[0]
-            for cur_weight_name in base_weights.keys():
-                result_weight = torch.zeros_like(base_weights[cur_weight_name])
-                for cur_shard_weights in shard_weights:
-                    result_weight += cur_shard_weights[cur_weight_name]
-                assert cur_weight_name not in collected_weights
-                collected_weights[cur_weight_name] = result_weight / len(shard_weights)
+        collected_weights = get_avg_weights(shard_weights)
 
         self._load_weights(collected_weights)

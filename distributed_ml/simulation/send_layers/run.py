@@ -2,7 +2,7 @@ from common.cifar import load_cifar10
 from distributed_ml.sharding.model_sharding import shard_model
 from common.resnet import ResNet
 from distributed_ml.simulation.send_layers.train import SendLayersTrain
-from distributed_ml.sharding.dataset_sharding import shard_dataset
+from distributed_ml.sharding.dataset_sharding import shard_dataset, ShardingMode
 import torch
 
 
@@ -11,7 +11,7 @@ def main():
     test_dataset = load_cifar10(is_train=False, save_path='../../../data')
     shards_count = 4
     shard_layers = shard_model(model=ResNet(2), shards_count=shards_count)
-    train_shards = shard_dataset(dataset=train_dataset, shards_count=shards_count, mode='replicate')
+    train_shards = shard_dataset(dataset=train_dataset, shards_count=shards_count, mode=ShardingMode.REPLICATE)
 
     simulator = SendLayersTrain(
         epochs=20,
