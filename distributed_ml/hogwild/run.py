@@ -15,6 +15,10 @@ def main():
     epochs = 10
 
     model = ResNet(n=2)
+    acc = calc_accuracy(model, test_dataset=test_dataset, batch_size=128)
+    print(f'Initial acc = {acc}')
+    accs = [acc]
+
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     assert total_params == trainable_params
@@ -39,7 +43,7 @@ def main():
                 "train_dataset": train_dataset,
                 "train_batch_size": 128,
                 "master_conn": worker_conns[worker_id],
-                "k": [p.numel() // 5 for p in model.parameters()],
+                "k": [p.numel() // 20 for p in model.parameters()],
                 "use_error_correction": True
             }
         )
@@ -58,6 +62,7 @@ def main():
             print(f'Master has received message <<{msg}>> from worker#{idx}')
 
         acc = calc_accuracy(model=model, test_dataset=test_dataset, batch_size=128)
+        accs.append(acc)
         cur_time = time.time()
         print(f'{epoch + 1} epochs passed, '
               f'{int(cur_time - epoch_start_time)} seconds elapsed per epoch, '
@@ -69,6 +74,9 @@ def main():
 
     for p in processes:
         p.join()
+
+    for cur_acc in accs:
+        print(cur_acc)
 
 
 if __name__ == '__main__':
