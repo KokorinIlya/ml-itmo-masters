@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision.datasets import VisionDataset
 
+from common.checks import check_models
 from common.evaluation import calc_accuracy
 from distributed_ml.simulation.common.utils import get_avg_weights
 
@@ -100,6 +101,8 @@ class SwarmSGD:
             all_weights = [dict(model.named_parameters()) for model in self.models]
             avg_weighs = get_avg_weights(all_weights)
             self.__apply_weights(0, len(self.shards_ids), avg_weighs)  # Global exchange
+            for i in range(1, len(self.models)):
+                assert check_models(base_model, self.models[i]), f'{i}-th model differs from base (0-th)'
             acc = calc_accuracy(base_model, self.test_dataset, batch_size=self.test_batch_size)
             accs.append(acc)
 
