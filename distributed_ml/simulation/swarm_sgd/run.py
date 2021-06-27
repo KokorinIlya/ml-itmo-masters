@@ -9,7 +9,7 @@ from distributed_ml.simulation.swarm_sgd.train import SwarmSGD
 def main():
     train_dataset = load_cifar10(is_train=True, save_path='../../../data')
     test_dataset = load_cifar10(is_train=False, save_path='../../../data')
-    shards_count = 6
+    shards_count = 4
     train_shards = shard_dataset(dataset=train_dataset, shards_count=shards_count, mode=ShardingMode.SHUFFLE_SHARD)
 
     simulator = SwarmSGD(
