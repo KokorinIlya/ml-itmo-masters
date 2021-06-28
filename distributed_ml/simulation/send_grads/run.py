@@ -2,6 +2,7 @@ from common.cifar import load_cifar10
 from distributed_ml.sharding.dataset_sharding import shard_dataset, ShardingMode
 from common.resnet import ResNet
 from distributed_ml.simulation.send_grads.train import SendGradientsTrain
+from distributed_ml.grad_processor.stochastic_quantizator import StochasticQuantizator
 from distributed_ml.grad_processor.top_k_sparcifier import TopKSparcifier
 from distributed_ml.grad_processor.one_bit_quantizator import OneBitQuantizator
 from distributed_ml.grad_processor.k_means_quantizator import KMeansQuantizator, determine_size_per_layer, \
@@ -28,8 +29,9 @@ def main():
         # gradient_processor=TopKSparcifier(k=total_params // 5),
         # gradient_processor=OneBitQuantizator(per_layer=True),
         # gradient_processor=OneBitQuantizator(per_layer=False),
-        gradient_processor=KMeansQuantizator(per_layer=False, size_determiner=determine_size_total_cut_reminder),
-        use_error_correction=True,
+        # gradient_processor=KMeansQuantizator(per_layer=False, size_determiner=determine_size_total_cut_reminder),
+        gradient_processor=StochasticQuantizator(per_layer=True, k=4, random_bound=True),
+        use_error_correction=False,
         train_batch_size=32,
         save_grad_dist=False
     )
